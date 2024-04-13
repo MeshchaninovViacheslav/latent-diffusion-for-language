@@ -47,7 +47,7 @@ def main(args):
         class_conditional= args.class_conditional,
         num_classes= (CONSTANTS.NUM_CLASSES[args.dataset_name] if args.class_conditional else 0),
         class_unconditional_prob= args.class_unconditional_prob,
-        seq2seq=(args.dataset_name in {'xsum', 'qqp', 'qg', 'wmt14-de-en', 'wmt14-en-de'}),
+        seq2seq=(args.mode in {"conditional", "downstream"}),
         seq2seq_context_dim=lm_dim, 
         num_dense_connections=args.num_dense_connections,
     ).cuda()
@@ -230,6 +230,12 @@ if __name__ == "__main__":
     parser.add_argument("--resume_dir", type=str, default=None)
     parser.add_argument("--latent_model_path", type=str, default=None)
     parser.add_argument("--init_path", type=str, default=None)
+    parser.add_argument(
+        "--mode", type=str, default="", 
+        choices=["conditional", "unconditional", "downstream"],
+        required=True,
+    )
+    parser.add_argument("--model_id", type=str, default=None)
     
     args = parser.parse_args()
     assert not (args.eval and args.resume_training)

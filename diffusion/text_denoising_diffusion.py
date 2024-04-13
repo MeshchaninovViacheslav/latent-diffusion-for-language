@@ -593,7 +593,6 @@ class Trainer(object):
     ):
         super().__init__()
 
-
         set_seeds(42)
 
         self.args = args
@@ -693,7 +692,7 @@ class Trainer(object):
 
         # dataset and dataloader
         self.dataset_name = dataset_name
-        dataset = text_dataset.get_dataset(dataset_name,)
+        dataset = text_dataset.get_dataset(dataset_name, mode=args.mode)
 
         self.dataset = dataset.shuffle(seed=42)
         if args.eval_test:
@@ -902,47 +901,53 @@ class Trainer(object):
                     texts_list = [self.tokenizer.decode(g, skip_special_tokens=True, clean_up_tokenization_spaces=True) for g in sample_ids]
                     texts_list = [text.strip() for text in texts_list if len(text.strip())>0]
                     all_texts_lists[k].extend(texts_list)
-        
+
         assert min([len(all_texts_lists[ele]) for ele in all_texts_lists]) >= num_samples
-        text_generations = {k:v[:num_samples] for k,v in all_texts_lists.items()} 
-
-        metrics = {}
-
+        #text_generations = {k:v[:num_samples] for k,v in all_texts_lists.items()} 
         self.ema.to('cpu')
         torch.cuda.empty_cache() 
-        for strategy, all_texts_list in text_generations.items():
-            class_id_prefix = f'cond{class_id}_' if exists(class_id) else ''
-            file_utils.save_text_samples(all_texts_list, os.path.join(self.results_folder, f'{"eval-" if self.args.eval else ""}{f"eval{seed}-" if self.args.eval_test else ""}{class_id_prefix}{strategy}-sample-{milestone}.txt'))
-            metrics[f"model/{strategy}/{class_id_prefix}perplexity"] = evaluation.compute_perplexity(all_texts_list)
-            metrics[f"model/{strategy}/{class_id_prefix}unique_wordcount"] = evaluation.compute_wordcount(all_texts_list)
-            ngram_metrics = evaluation.compute_diversity(all_texts_list)
-            for k, v in ngram_metrics.items():
-                metrics[f"model/{strategy}/{class_id_prefix}{k}"] = v
-            metrics[f"model/{strategy}/{class_id_prefix}memorization"] = evaluation.compute_memorization(all_texts_list, self.dataset['train']['text'])
-            table = wandb.Table( 
-                columns=['Samples'], data=[[text] for text in all_texts_list])
-            accelerator.log({f"model/{strategy}/{class_id_prefix}samples": table}, self.step)
 
-            # Only evaluate MAUVE if generations are reasonable to speed up validation early on
-            if metrics[f"model/{strategy}/{class_id_prefix}perplexity"] > 5000:
-                continue
+        text_generations = all_texts_lists["beam"][:num_samples]
+        save_dir = os.path.join(os.environ["BENCHMARK_ROOT"], self.args.model_id, "generated_texts", self.args.mode, self.args.dataset_name)
+        os.makedirs(save_dir, exist_ok=True)
+        save_path = os.path.join(save_dir, "texts.json")
+        json.dump(text_generations, open(save_path, "w"), indent=4)
+        print(f"Results are saved: {save_path}")
 
-            for mauve_model_id in ["gpt2-large"]:
-                for key, reference_text in reference_texts.items():
-                    metrics[f"model/{strategy}/{mauve_model_id}_{class_id_prefix}{key}_mauve"], _ = evaluation.compute_mauve(all_texts_list, reference_text, mauve_model_id)
 
-        if len(self.reference_dict) == 0 or test:
-            self.log_reference_metrics(test)
-        if test:
-            metrics_dict = {**metrics,**self.reference_dict}
-            metrics_dict = {f'{k}_seed{seed}':v for k,v in metrics_dict.items()}
-            accelerator.log(metrics_dict, self.step)
-            print(metrics_dict)
-        else:
-            accelerator.log({**metrics,**self.reference_dict}, self.step)
-        torch.cuda.empty_cache() 
-        self.diffusion.to(device)
-        self.ema.to(device)
+        # for strategy, all_texts_list in text_generations.items():
+        #     class_id_prefix = f'cond{class_id}_' if exists(class_id) else ''
+        #     file_utils.save_text_samples(all_texts_list, os.path.join(self.results_folder, f'{"eval-" if self.args.eval else ""}{f"eval{seed}-" if self.args.eval_test else ""}{class_id_prefix}{strategy}-sample-{milestone}.txt'))
+        #     metrics[f"model/{strategy}/{class_id_prefix}perplexity"] = evaluation.compute_perplexity(all_texts_list)
+        #     metrics[f"model/{strategy}/{class_id_prefix}unique_wordcount"] = evaluation.compute_wordcount(all_texts_list)
+        #     ngram_metrics = evaluation.compute_diversity(all_texts_list)
+        #     for k, v in ngram_metrics.items():
+        #         metrics[f"model/{strategy}/{class_id_prefix}{k}"] = v
+        #     metrics[f"model/{strategy}/{class_id_prefix}memorization"] = evaluation.compute_memorization(all_texts_list, self.dataset['train']['text'])
+        #     table = wandb.Table( 
+        #         columns=['Samples'], data=[[text] for text in all_texts_list])
+        #     accelerator.log({f"model/{strategy}/{class_id_prefix}samples": table}, self.step)
+
+        #     # Only evaluate MAUVE if generations are reasonable to speed up validation early on
+        #     if metrics[f"model/{strategy}/{class_id_prefix}perplexity"] > 5000:
+        #         continue
+
+        #     for mauve_model_id in ["gpt2-large"]:
+        #         for key, reference_text in reference_texts.items():
+        #             metrics[f"model/{strategy}/{mauve_model_id}_{class_id_prefix}{key}_mauve"], _ = evaluation.compute_mauve(all_texts_list, reference_text, mauve_model_id)
+
+        # if len(self.reference_dict) == 0 or test:
+        #     self.log_reference_metrics(test)
+        # if test:
+        #     metrics_dict = {**metrics,**self.reference_dict}
+        #     metrics_dict = {f'{k}_seed{seed}':v for k,v in metrics_dict.items()}
+        #     accelerator.log(metrics_dict, self.step)
+        #     print(metrics_dict)
+        # else:
+        #     accelerator.log({**metrics,**self.reference_dict}, self.step)
+        # torch.cuda.empty_cache() 
+        # self.diffusion.to(device)
+        # self.ema.to(device)
 
     @torch.no_grad()
     def sample_seq2seq(self, num_samples=None, split='val', seed=42, num_candidates=None, cls_free_guidance=1.0,):

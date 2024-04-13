@@ -2,7 +2,7 @@ from multiprocessing.spawn import prepare
 import os
 import json
 
-from datasets import load_dataset, Value
+from datasets import load_from_disk, load_dataset, Value
 from torch.utils.data import Dataset, DataLoader
 from transformers import PreTrainedTokenizerBase, default_data_collator
 
@@ -13,13 +13,13 @@ def exists(x):
     return x is not None
 
 
-def get_dataset(dataset_name, metadata=False, synthetic_train_path=None):
-    if dataset_name == 'roc':
-        roc_data_path = 'datasets/ROCstory'
-        dataset = load_dataset("text", data_files={f'{split}': os.path.join(roc_data_path, f'roc_{split}.json') for split in ['train', 'valid']})
-        dataset = process_roc_dataset(dataset)
+def get_dataset(dataset_name, mode="unconditional", metadata=False, synthetic_train_path=None):
+    if dataset_name == 'rocstories':
+        roc_data_path = os.path.join(os.environ["BENCHMARK_ROOT"], "datasets", mode, dataset_name)
+        dataset = load_from_disk(roc_data_path)
+        dataset = process_roc_dataset(dataset, mode=mode)
     elif dataset_name == 'ag_news':
-        dataset = load_dataset('pietrolesci/ag_news', 'original')
+        dataset = load_from_disk('/home/vmeshchaninov/shared_folder/data/ag_news')
         train_ds = dataset['train']
         train_val_ds = train_ds.train_test_split(test_size=1000, seed=42)
         train_val_ds['valid'] = train_val_ds['test']
@@ -59,26 +59,18 @@ def get_dataset(dataset_name, metadata=False, synthetic_train_path=None):
     return dataset
 
 
-def process_roc_dataset(dataset):
-    def extract_roc_text(example):
-        text = example['text']
-        assert text[:2] == '["'
-        assert text[-2:] == '"]'
-        sentences = text[2:-2]
-        return {'text': sentences}
-    dataset = dataset.map(extract_roc_text, )
-    dataset = dataset.shuffle(seed=42)
-    # Hold out some validation samples for testing
-    val_test_ds = dataset['valid'].train_test_split(train_size=1000, shuffle=False)
-    dataset['valid'] = val_test_ds['train']
-    dataset['test'] = val_test_ds['test']
+def process_roc_dataset(dataset, mode):
+    if mode == "unconditional":
+        dataset = dataset.rename_column("target", "text")
+    elif mode == "conditional":
+        dataset = dataset.rename_columns({"target": "text", "source": "context"})
     return dataset
 
 def process_ag_news_dataset(dataset):
-    def process_ag_news_text(example):
-        # return {'text': PreTrainedTokenizerBase.clean_up_tokenization(f'Title: {example["title"]}<pad> Description: {example["description"]}'.strip()), 'label':example['label']-1}
-        return {'text': PreTrainedTokenizerBase.clean_up_tokenization(example["description"].strip()), 'label':example['label']-1}
-    dataset = dataset.map(process_ag_news_text, remove_columns=['title', 'description', 'class'])
+    # def process_ag_news_text(example):
+    #     # return {'text': PreTrainedTokenizerBase.clean_up_tokenization(f'Title: {example["title"]}<pad> Description: {example["description"]}'.strip()), 'label':example['label']-1}
+    #     return {'text': PreTrainedTokenizerBase.clean_up_tokenization(example["description"].strip()), 'label':example['label']-1}
+    # dataset = dataset.map(process_ag_news_text, remove_columns=['label'])
     return dataset
 
 def process_xsum_dataset(dataset):
