@@ -19,8 +19,8 @@ python train_text_diffusion.py \
     --num_dense_connections 3  \
     --optimizer adamw \
     --train_prob_self_cond 0.5 \
-    --max_seq_len 64 \
-    --mode unconditional \
+    --max_seq_len 32 \
+    --mode conditional \
     --model_id "latent-diffusion-for-language"
 
     # --resume_training \

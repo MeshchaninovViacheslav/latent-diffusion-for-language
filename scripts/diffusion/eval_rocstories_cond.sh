@@ -1,10 +1,11 @@
 python train_text_diffusion.py --eval \
     --dataset_name rocstories \
     --resume_dir saved_diff_models/rocstories/2024-03-16_12-41-51 \
+    --latent_model_path "saved_latent_models/rocstories/2024-03-07_14-57-58" \
     --sampling_timesteps 250 \
     --num_samples 10000 \
     --wandb_name roc_ddpm \
     --sampler ddpm \
     --sampling_schedule cosine \
-    --mode unconditional \
+    --mode conditional \
     --model_id "latent-diffusion-for-language"

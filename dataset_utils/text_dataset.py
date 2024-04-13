@@ -113,18 +113,16 @@ def parse_metadata(metadata):
 def get_dataloader(args, dataset, model_config, tokenizer, max_seq_len, mode='diffusion', shuffle=True, context_tokenizer=None):
     def tokenization(example):
         # print('EXAMPLE: ', example)
-        if mode == 'diffusion' and args.dataset_name in {'xsum', 'qqp',  'wmt14-en-de', 'wmt14-de-en'}:
+        if mode == 'diffusion' and args.mode in ["conditional", "downstream"]:
             # import pdb; pdb.set_trace()
             assert context_tokenizer is not None
             source = example['context']
             target = example['text']
 
-            if args.dataset_name in {'qqp', 'wmt14-en-de', 'wmt14-de-en'}:
-                cond_inputs = context_tokenizer(source, padding="max_length", truncation=True, max_length=max_seq_len)
-            elif args.dataset_name in {'xsum',}:
+            if args.dataset_name in {'xsum',}:
                 cond_inputs = context_tokenizer(source, padding="max_length", truncation=True, max_length=max_seq_len*4)
             else:
-                raise NotImplementedError
+                cond_inputs = context_tokenizer(source, padding="max_length", truncation=True, max_length=max_seq_len)
 
             model_inputs = tokenizer(text_target=target, padding="max_length", truncation=True, max_length=max_seq_len)
             
@@ -146,7 +144,7 @@ def get_dataloader(args, dataset, model_config, tokenizer, max_seq_len, mode='di
     else:
         raise NotImplementedError
     
-    if args.dataset_name in {'xsum', 'qqp'} or 'wmt14' in args.dataset_name:
+    if args.mode in ["conditional", "downstream"]:
         dataset = dataset.map(tokenization, remove_columns=['text', 'context'], batched=True, num_proc=None)
     else:
         dataset = dataset.map(tokenization, remove_columns='text')
