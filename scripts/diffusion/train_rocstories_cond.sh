@@ -21,7 +21,8 @@ python train_text_diffusion.py \
     --train_prob_self_cond 0.5 \
     --max_seq_len 32 \
     --mode conditional \
-    --model_id "latent-diffusion-for-language"
+    --model_id "latent-diffusion-for-language" \
+    --mixed_precision bf16
 
     # --resume_training \
     # --resume_dir "saved_diff_models/roc/2024-04-13_16-26-20"
